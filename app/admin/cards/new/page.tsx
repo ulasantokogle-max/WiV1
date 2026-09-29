@@ -1,0 +1,16 @@
+"use client";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { createSupabaseBrowser } from "@/lib/supabase-browser";
+import { useRouter } from "next/navigation";
+
+export default function NewCardPage() {
+  const supabase = useMemo(() => createSupabaseBrowser(), []); const router = useRouter();
+  const [allowed, setAllowed] = useState<boolean | null>(null); const [message, setMessage] = useState("");
+  const [form, setForm] = useState({ businessName: "", locationName: "", address: "", cardCode: "", slug: "", ssid: "", password: "", securityType: "WPA2", instructions: "" });
+  useEffect(() => { supabase.auth.getUser().then(({ data }) => setAllowed(!!data.user)); }, [supabase]);
+  function update(key: string, value: string) { setForm(f => ({ ...f, [key]: value })); }
+  async function submit(e: FormEvent) { e.preventDefault(); setMessage(""); const res = await fetch("/api/admin/cards", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) }); const json = await res.json(); if (!json.success) return setMessage(json.error || "Gagal"); router.push(`/admin/cards/${json.data.slug}`); }
+  if (allowed === null) return <main className="container page"><p>Loading…</p></main>;
+  if (!allowed) return <main className="container page"><div className="panel"><h1>Unauthorized</h1></div></main>;
+  return <main className="container page narrow"><div className="dashboard-head"><div><p className="eyebrow">WIV1 / CARDS</p><h1>Buat WiFi Card</h1><p className="muted">Buat satu kartu baru dengan URL yang siap dipakai untuk QR dan NFC.</p></div><button className="secondary" onClick={() => router.push("/admin")}>Kembali</button></div><form className="panel form grid2" onSubmit={submit}><h2 className="wide">Business</h2><input required placeholder="Nama bisnis" value={form.businessName} onChange={e => update("businessName", e.target.value)}/><input required placeholder="Nama lokasi" value={form.locationName} onChange={e => update("locationName", e.target.value)}/><input className="wide" placeholder="Alamat (opsional)" value={form.address} onChange={e => update("address", e.target.value)}/><h2 className="wide">Card</h2><input required placeholder="Card code · WIFI001" value={form.cardCode} onChange={e => update("cardCode", e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""))}/><input required placeholder="Slug · wifi001" value={form.slug} onChange={e => update("slug", e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}/><h2 className="wide">WiFi Network</h2><input required placeholder="SSID / Nama WiFi" value={form.ssid} onChange={e => update("ssid", e.target.value)}/><input required type="password" placeholder="Password WiFi" value={form.password} onChange={e => update("password", e.target.value)}/><select value={form.securityType} onChange={e => update("securityType", e.target.value)}><option>WPA2</option><option>WPA3</option><option>Open</option></select><textarea className="wide" rows={5} placeholder="Instruksi koneksi untuk customer" value={form.instructions} onChange={e => update("instructions", e.target.value)}/><button className="wide" type="submit">Buat WiFi Card</button>{message && <p className="error wide">{message}</p>}</form></main>;
+}

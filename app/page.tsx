@@ -1,0 +1,3 @@
+export default function Home() {
+  return <main className="container page" style={{ maxWidth: 760 }}><div className="panel" style={{ textAlign: "center", padding: "56px 28px" }}><div className="brand-mark" style={{ margin: "0 auto 22px" }}>Wi</div><p className="eyebrow">WIV1</p><h1>WiFi access, simplified.</h1><p className="muted" style={{ maxWidth: 520, margin: "12px auto 24px" }}>Standalone NFC + QR WiFi platform untuk bisnis, venue, cafe, hotel, dan lokasi publik.</p><div className="head-actions" style={{ justifyContent: "center" }}><a className="button" href="/admin">Admin Dashboard</a></div></div></main>;
+}
