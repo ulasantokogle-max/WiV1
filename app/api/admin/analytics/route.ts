@@ -21,7 +21,14 @@ export async function GET() {
     const rows = (cards ?? []).map(card => {
       const own = (events ?? []).filter(e => e.card_id === card.id);
       const count = (type:string) => own.filter(e => e.event_type === type).length;
-      const business = Array.isArray(card.businesses) ? card.businesses[0]?.name : card.businesses?.name;
+const businessRelation = card.businesses as
+  | { name: string }[]
+  | { name: string }
+  | null;
+
+const business = Array.isArray(businessRelation)
+  ? businessRelation[0]?.name
+  : businessRelation?.name;
       return { card_id:card.id, card_code:card.card_code, slug:card.slug, business:business ?? "-", views:count("page_view"), qr:count("qr_scan"), nfc:count("nfc_scan"), copies:count("password_copy"), connects:count("wifi_connect") };
     });
     return NextResponse.json({success:true,data:{rows},error:null});
