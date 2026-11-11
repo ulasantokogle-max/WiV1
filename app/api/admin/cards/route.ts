@@ -89,12 +89,22 @@ export async function POST(request: Request) {
       p_security_type: body.securityType,
       p_instructions: body.instructions || "",
     });
-    if (createError) throw createError;
+    if (createError) {
+      // 23505 is a PostgreSQL unique violation (card code or slug).
+      if (createError.code === "23505") {
+        return NextResponse.json({ success: false, data: null, error: "Kode kartu atau slug sudah digunakan" }, { status: 409 });
+      }
+      console.error("WiV1 atomic create RPC unavailable", createError);
+      return NextResponse.json({ success: false, data: null, error: "Layanan pembuatan kartu belum tersedia" }, { status: 503 });
+    }
 
     return NextResponse.json({ success: true, data: card, error: null }, { status: 201 });
   } catch (error) {
     console.error("WiV1 admin card create", error);
-    const message = error instanceof z.ZodError ? "Data kartu tidak valid" : "Gagal membuat kartu";
-    return NextResponse.json({ success: false, data: null, error: message }, { status: 400 });
+    const invalidInput = error instanceof z.ZodError || error instanceof SyntaxError;
+    return NextResponse.json({
+      success: false, data: null,
+      error: invalidInput ? "Data kartu tidak valid" : "Layanan pembuatan kartu belum tersedia",
+    }, { status: invalidInput ? 400 : 503 });
   }
 }
