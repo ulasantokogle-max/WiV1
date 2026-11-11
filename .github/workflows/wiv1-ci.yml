@@ -83,5 +83,6 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -f supabase/001_initial_schema.sql
           psql -v ON_ERROR_STOP=1 -f supabase/002_v06_atomic_and_events.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/003_v06_trigger_search_path.sql
       - name: Verify atomic rollback, rate limits and RPC permissions
         run: psql -v ON_ERROR_STOP=1 -f tests/v06-database.sql
