@@ -26,47 +26,61 @@ export default function WifiPage({ params }: { params: Promise<{ slug: string }>
         if (!json.success) { if (!cancelled) setError(json.error ?? "WiFi tidak tersedia"); return; }
         if (cancelled) return;
         setCard(json.data);
-        await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardId: json.data.id, eventType: eventSource === "qr" ? "qr_scan" : eventSource === "nfc" ? "nfc_scan" : "page_view", source: eventSource }) });
+        void fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardId: json.data.id, eventType: eventSource === "qr" ? "qr_scan" : eventSource === "nfc" ? "nfc_scan" : "page_view", source: eventSource }) }).catch(() => {});
       } catch { if (!cancelled) setError("Koneksi bermasalah. Silakan coba lagi."); }
     });
     return () => { cancelled = true; };
   }, [params]);
 
-  async function copyPassword() {
+  async function logEvent(eventType: "password_copy" | "wifi_connect") {
     if (!card) return;
-    const response = await fetch(`/api/wifi/${encodeURIComponent(card.slug)}/secret`, { cache: "no-store" });
-    const json = await response.json();
-    if (!json.success) return;
-    await navigator.clipboard.writeText(json.data.password);
-    setCopied(true);
-    await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardId: card.id, eventType: "password_copy", source }) });
-    setTimeout(() => setCopied(false), 1800);
+    // Analytics must never block the user from connecting.
+    await fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardId: card.id, eventType, source }),
+    }).catch(() => {});
+  }
+
+  async function copyNetworkPassword(): Promise<boolean> {
+    if (!card || card.security_type.toLowerCase() === "open") return false;
+    try {
+      const response = await fetch(`/api/wifi/${encodeURIComponent(card.slug)}/secret`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Secret endpoint unavailable");
+      const json = await response.json();
+      if (!json.success || typeof json.data?.password !== "string") throw new Error("Invalid WiFi response");
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(json.data.password);
+      setCopied(true);
+      void logEvent("password_copy");
+      return true;
+    } catch {
+      setCopied(false);
+      return false;
+    }
+  }
+
+  async function copyPassword() {
+    const ok = await copyNetworkPassword();
+    setConnectHelp(ok
+      ? "Password disalin. Buka pengaturan WiFi, pilih jaringan di atas, lalu tempel password."
+      : "Browser tidak mengizinkan penyalinan otomatis. Buka halaman melalui HTTPS dan izinkan Clipboard, lalu coba lagi.");
   }
 
   async function connectWifi() {
     if (!card || connecting) return;
     setConnecting(true);
-    setConnectHelp("");
     try {
-      // Browsers cannot reliably join a WiFi network from a WIFI: URI.
-      // Use a clear copy-and-settings flow instead of promising auto-connect.
-      if (card.security_type.toLowerCase() !== "open") {
-        const response = await fetch(`/api/wifi/${encodeURIComponent(card.slug)}/secret`, { cache: "no-store" });
-        const json = await response.json();
-        if (!json.success) throw new Error("Password WiFi tidak tersedia");
-        if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(json.data.password);
-          setCopied(true);
-          setConnectHelp("Password disalin. Buka pengaturan WiFi perangkat, pilih jaringan yang tertera, lalu tempel password.");
-        } else {
-          setConnectHelp("Buka pengaturan WiFi perangkat, pilih jaringan yang tertera. Gunakan tombol Copy Password jika browser mengizinkan.");
-        }
+      if (card.security_type.toLowerCase() === "open") {
+        setConnectHelp("Jaringan ini tidak memerlukan password. Buka pengaturan WiFi perangkat dan pilih nama jaringan di atas.");
       } else {
-        setConnectHelp("Jaringan ini tidak memerlukan password. Buka pengaturan WiFi perangkat dan pilih nama jaringan yang tertera.");
+        const copiedNow = await copyNetworkPassword();
+        setConnectHelp(copiedNow
+          ? "Password berhasil disalin. Buka pengaturan WiFi perangkat, pilih jaringan di atas, dan tempel password."
+          : "Penyalinan password tidak didukung atau gagal. Buka melalui HTTPS, gunakan tombol Copy Password, lalu sambungkan dari pengaturan WiFi.");
       }
-      await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardId: card.id, eventType: "wifi_connect", source }) }).catch(() => {});
-    } catch {
-      setConnectHelp("Buka pengaturan WiFi perangkat, pilih nama jaringan, dan gunakan tombol Copy Password jika diperlukan.");
+      // This is a connection-help interaction; it does not verify WiFi association.
+      void logEvent("wifi_connect");
     } finally {
       setConnecting(false);
     }
