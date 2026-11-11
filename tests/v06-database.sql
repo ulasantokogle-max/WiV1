@@ -34,6 +34,36 @@ begin
  select count(*) into v_after from public.businesses;
  if v_after <> v_before then raise exception 'partial business row remained after failure'; end if;
 
+ -- Duplicate card code should also roll back all four inserts.
+ v_error := false;
+ begin
+   perform public.wiv1_create_card_atomic(
+    'Duplicate Code','Test','','QA-001','qa-002','Test','encrypted','WPA2','');
+ exception when unique_violation then v_error := true;
+ end;
+ if not v_error or (select count(*) from public.businesses) <> v_before
+    then raise exception 'duplicate card-code rollback failed'; end if;
+
+ -- Network records must reject empty ciphertext, even through direct RPC calls.
+ v_error := false;
+ begin
+   perform public.wiv1_create_card_atomic(
+     'Empty Password','Test','','QA-003','qa-003','Test','','WPA2','');
+ exception when others then v_error := true;
+ end;
+ if not v_error or (select count(*) from public.businesses) <> v_before
+    then raise exception 'empty encrypted password rollback failed'; end if;
+
+ -- An invalid security type cannot create any partial records.
+ v_error := false;
+ begin
+   perform public.wiv1_create_card_atomic(
+     'Invalid Security','Test','','QA-004','qa-004','Test','encrypted','INVALID','');
+ exception when others then v_error := true;
+ end;
+ if not v_error or (select count(*) from public.businesses) <> v_before
+    then raise exception 'invalid network security rollback failed'; end if;
+
  -- Card / IP throttle: exactly 30 successes in 60 seconds.
  for v_idx in 1..30 loop
    v_accepted := public.wiv1_record_event_limited(v_card,'page_view','qr','ip-A','qa-test');
