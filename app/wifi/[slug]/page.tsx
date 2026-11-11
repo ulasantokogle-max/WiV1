@@ -9,6 +9,7 @@ export default function WifiPage({ params }: { params: Promise<{ slug: string }>
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [connectHelp, setConnectHelp] = useState("");
   const [device, setDevice] = useState<"ios" | "android" | "other">("other");
 
   useEffect(() => {
@@ -42,25 +43,32 @@ export default function WifiPage({ params }: { params: Promise<{ slug: string }>
     setTimeout(() => setCopied(false), 1800);
   }
 
-  function wifiEscape(value: string) {
-    return value.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/:/g, "\\:");
-  }
-
   async function connectWifi() {
     if (!card || connecting) return;
     setConnecting(true);
+    setConnectHelp("");
     try {
-      const response = await fetch(`/api/wifi/${encodeURIComponent(card.slug)}/secret`, { cache: "no-store" });
-      const json = await response.json();
-      if (!json.success) throw new Error(json.error || "Password WiFi tidak tersedia");
-      const password = json.data.password || "";
-      const type = card.security_type.toLowerCase() === "open" ? "nopass" : "WPA";
-      const wifiUri = `WIFI:T:${type};S:${wifiEscape(card.ssid)};P:${wifiEscape(password)};;`;
-      await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardId: card.id, eventType: "wifi_connect", source }) });
-      window.location.href = wifiUri;
+      // Browsers cannot reliably join a WiFi network from a WIFI: URI.
+      // Use a clear copy-and-settings flow instead of promising auto-connect.
+      if (card.security_type.toLowerCase() !== "open") {
+        const response = await fetch(`/api/wifi/${encodeURIComponent(card.slug)}/secret`, { cache: "no-store" });
+        const json = await response.json();
+        if (!json.success) throw new Error("Password WiFi tidak tersedia");
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(json.data.password);
+          setCopied(true);
+          setConnectHelp("Password disalin. Buka pengaturan WiFi perangkat, pilih jaringan yang tertera, lalu tempel password.");
+        } else {
+          setConnectHelp("Buka pengaturan WiFi perangkat, pilih jaringan yang tertera. Gunakan tombol Copy Password jika browser mengizinkan.");
+        }
+      } else {
+        setConnectHelp("Jaringan ini tidak memerlukan password. Buka pengaturan WiFi perangkat dan pilih nama jaringan yang tertera.");
+      }
+      await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardId: card.id, eventType: "wifi_connect", source }) }).catch(() => {});
     } catch {
+      setConnectHelp("Buka pengaturan WiFi perangkat, pilih nama jaringan, dan gunakan tombol Copy Password jika diperlukan.");
+    } finally {
       setConnecting(false);
-      setError("Koneksi WiFi otomatis tidak tersedia di browser ini. Gunakan tombol Copy Password lalu sambungkan dari pengaturan WiFi.");
     }
   }
 
@@ -71,8 +79,8 @@ export default function WifiPage({ params }: { params: Promise<{ slug: string }>
     {card.logo_url ? <img className="wifi-logo" src={card.logo_url} alt="" /> : <div className="wifi-icon">Wi</div>}
     <p className="wifi-eyebrow">WIFI ACCESS</p><h1>{card.business_name}</h1><p className="muted">Terhubung ke internet dengan mudah.</p>
     <div className="network-box"><span>Nama WiFi</span><strong>{card.ssid}</strong><small>{card.security_type}</small></div>
-    <div className="wifi-actions"><button className="copy-button" onClick={copyPassword}>{copied ? "✓ Password Tersalin" : "Copy Password"}</button><button className="connect-button" onClick={connectWifi} disabled={connecting}>{connecting ? "Membuka koneksi…" : "Connect WiFi"}</button></div>
-    {card.instructions && <div className="instructions"><strong>Cara terhubung</strong><p>{card.instructions}</p></div>}<div className="device-tip"><strong>{device === "ios" ? "iPhone / iPad" : device === "android" ? "Android" : "HP / Laptop"}</strong><p>{device === "ios" ? "Tap Connect WiFi. Jika perangkat tidak membuka koneksi otomatis, copy password lalu pilih jaringan ini di Settings → Wi‑Fi." : device === "android" ? "Tap Connect WiFi. Jika perangkat tidak membuka koneksi otomatis, copy password lalu pilih jaringan ini di Wi‑Fi." : "Tap Connect WiFi bila perangkat mendukung WiFi URI. Jika tidak, copy password dan sambungkan dari menu WiFi."}</p></div>
+    <div className="wifi-actions"><button className="copy-button" onClick={copyPassword} disabled={card.security_type.toLowerCase() === "open"}>{card.security_type.toLowerCase() === "open" ? "Tanpa Password" : copied ? "✓ Password Tersalin" : "Copy Password"}</button><button className="connect-button" onClick={connectWifi} disabled={connecting}>{connecting ? "Menyiapkan panduan…" : "Bantu Hubungkan WiFi"}</button></div>
+    {card.instructions && <div className="instructions"><strong>Cara terhubung</strong><p>{card.instructions}</p></div>}<div className="device-tip"><strong>{device === "ios" ? "iPhone / iPad" : device === "android" ? "Android" : "HP / Laptop"}</strong><p>{device === "ios" ? "Tap Connect WiFi. Jika perangkat tidak membuka koneksi otomatis, copy password lalu pilih jaringan ini di Settings → Wi‑Fi." : device === "android" ? "Tap Connect WiFi. Jika perangkat tidak membuka koneksi otomatis, copy password lalu pilih jaringan ini di Wi‑Fi." : "Tap Bantu Hubungkan WiFi lalu pilih jaringan ini di pengaturan Wi-Fi perangkat."}</p></div>
     <p className="wifi-footer">WiV1 · WiFi access made simple</p>
   </div></main>;
 }
