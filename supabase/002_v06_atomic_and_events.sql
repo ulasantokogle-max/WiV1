@@ -35,10 +35,10 @@ create or replace function public.wiv1_record_event_limited(
 ) returns boolean
 language plpgsql security invoker set search_path = ''
 as $$
-declare v_count integer;
+declare v_count integer; v_card_count integer;
 begin
   -- Serialize requests for one card/IP to prevent concurrent rate-limit bypass.
-  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_card_id::text || ':' || p_ip_hash, 0));
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_card_id::text, 0));
   if not exists (select 1 from public.wifi_cards where id = p_card_id and status = 'active') then
     return false;
   end if;
@@ -46,6 +46,14 @@ begin
    where card_id = p_card_id and ip_hash = p_ip_hash
      and created_at > pg_catalog.now() - interval '1 minute';
   if v_count >= 30 then
+    return false;
+  end if;
+  -- Additional card-wide cap limits spoofed-IP traffic.
+  -- Transaction advisory locks serialize card-wide checks across concurrent requests.
+  select count(*) into v_card_count from public.wifi_events
+   where card_id = p_card_id
+     and created_at > pg_catalog.now() - interval '1 minute';
+  if v_card_count >= 300 then
     return false;
   end if;
   insert into public.wifi_events(card_id,event_type,source,ip_hash,user_agent)
