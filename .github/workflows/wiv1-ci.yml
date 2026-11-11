@@ -8,6 +8,7 @@ on:
       - "lib/**"
       - "types/**"
       - "supabase/**"
+      - "tests/**"
       - "package.json"
       - "tsconfig.json"
       - ".github/workflows/wiv1-ci.yml"
@@ -39,3 +40,45 @@ jobs:
         run: npx tsc --noEmit
       - name: Production build (CI placeholder env, no live data)
         run: npm run build
+
+  database-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: wiv1_qa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d wiv1_qa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: ci-only-password
+      PGDATABASE: wiv1_qa
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bootstrap Supabase auth objects for disposable PostgreSQL
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          create role anon nologin;
+          create role authenticated nologin;
+          create role service_role nologin bypassrls;
+          create schema auth;
+          create table auth.users (id uuid primary key);
+          create function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
+          SQL
+      - name: Apply WiV1 migrations to disposable database
+        run: |
+          psql -v ON_ERROR_STOP=1 -f supabase/001_initial_schema.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/002_v06_atomic_and_events.sql
+      - name: Verify atomic rollback, rate limits and RPC permissions
+        run: psql -v ON_ERROR_STOP=1 -f tests/v06-database.sql
