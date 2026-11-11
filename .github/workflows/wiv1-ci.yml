@@ -1,0 +1,41 @@
+name: WiV1 V0.6 branch checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "lib/**"
+      - "types/**"
+      - "supabase/**"
+      - "package.json"
+      - "tsconfig.json"
+      - ".github/workflows/wiv1-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-key
+      WIV1_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      NEXT_PUBLIC_WIV1_BASE_URL: https://example.com
+      WIV1_BASE_URL: https://example.com
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies without changing the repository
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: TypeScript validation
+        run: npx tsc --noEmit
+      - name: Production build (CI placeholder env, no live data)
+        run: npm run build
