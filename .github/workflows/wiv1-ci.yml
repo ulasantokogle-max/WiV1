@@ -9,6 +9,7 @@ on:
       - "types/**"
       - "supabase/**"
       - "tests/**"
+      - "scripts/**"
       - "package.json"
       - "tsconfig.json"
       - ".github/workflows/wiv1-ci.yml"
@@ -36,6 +37,8 @@ jobs:
           node-version: "22"
       - name: Install dependencies without changing the repository
         run: npm install --no-audit --no-fund --package-lock=false
+      - name: Validate read-only preview smoke script
+        run: node --check scripts/staging-smoke.mjs
       - name: TypeScript validation
         run: npx tsc --noEmit
       - name: Production build (CI placeholder env, no live data)
