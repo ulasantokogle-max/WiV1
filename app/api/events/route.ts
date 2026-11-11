@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createHmac } from "node:crypto";
+import { ZodError } from "zod";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { eventSchema } from "@/lib/validation";
 
@@ -22,13 +23,17 @@ export async function POST(request: Request) {
       p_ip_hash: ipHash,
       p_user_agent: request.headers.get("user-agent") || "",
     });
-    if (error) throw error;
+    if (error) {
+      console.error("WiV1 event RPC unavailable", error);
+      return NextResponse.json({ success: false, data: null, error: "Event service unavailable" }, { status: 503 });
+    }
     if (!accepted) {
       return NextResponse.json({ success: false, data: null, error: "Card inactive or event limit reached" }, { status: 429 });
     }
     return NextResponse.json({ success: true, data: null, error: null });
   } catch (error) {
     console.error("WiV1 event rejected", error);
-    return NextResponse.json({ success: false, data: null, error: "Invalid event or server unavailable" }, { status: 400 });
+    const invalidInput = error instanceof ZodError || error instanceof SyntaxError;
+    return NextResponse.json({ success: false, data: null, error: invalidInput ? "Invalid event" : "Event service unavailable" }, { status: invalidInput ? 400 : 503 });
   }
 }
