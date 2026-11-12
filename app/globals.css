@@ -88,3 +88,10 @@ tr:last-child td { border-bottom:0; }
 .print-instructions { margin-top:3mm; text-align:left; border:1px solid #eaecf0; border-radius:3mm; padding:3mm; font-size:9px; }.print-instructions p { white-space:pre-wrap; color:#667085; margin:1mm 0 0; line-height:1.4; }
 .print-url { margin-top:3mm; font-family:ui-monospace,monospace; font-size:8px; overflow-wrap:anywhere; color:#667085; }.print-footer { margin-top:4mm; color:#98a2b3; font-size:8px; }
 @media print { @page { size:A4; margin:10mm; } body { background:#fff !important; } .print-page { background:#fff; padding:0; } .print-toolbar { display:none; } .print-card { box-shadow:none; border:1px solid #ccc; margin:0; page-break-inside:avoid; } }
+
+/* V0.6: QR-based WiFi connection guidance */
+.wifi-actions:has(.connect-button:only-child) { grid-template-columns:1fr; }
+.wifi-connect-panel { margin-top:14px; padding:18px 14px; border:1px solid #e4e7ec; border-radius:16px; background:#f8fafc; }
+.wifi-connect-panel > strong { display:block; font-size:15px; }
+.wifi-connect-panel p { font-size:12px; line-height:1.6; margin:9px 0; }
+.wifi-connect-qr { display:block; width:min(260px,100%); aspect-ratio:1; object-fit:contain; margin:14px auto; background:white; border:1px solid #e4e7ec; border-radius:14px; padding:10px; }
