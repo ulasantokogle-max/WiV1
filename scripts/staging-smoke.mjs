@@ -22,6 +22,7 @@ const checks = [
   { path: "/", status: 200, label: "Homepage" },
   { path: "/api/wifi/" + suffix, status: 404, label: "Unknown WiFi card" },
   { path: "/api/wifi/" + suffix + "/secret", status: 404, label: "Unknown WiFi secret" },
+  { path: "/api/wifi/" + suffix + "/connect-qr", status: 404, label: "Unknown WiFi connect QR" },
   { path: "/api/admin/cards", status: 401, label: "Admin authorization" },
 ];
 let failures = 0;
@@ -39,7 +40,7 @@ for (const check of checks) {
     const ok = response.status === check.status;
     console.log(`${ok ? "PASS" : "FAIL"} ${check.label}: HTTP ${response.status} (expected ${check.status})`);
     if (!ok) failures++;
-    if (check.path.endsWith("/secret")) {
+    if (check.path.endsWith("/secret") || check.path.endsWith("/connect-qr")) {
       const cache = response.headers.get("cache-control") || "";
       const privateNoStore = /no-store/i.test(cache);
       console.log(`${privateNoStore ? "PASS" : "FAIL"} Secret cache policy: ${cache || "(missing)"}`);
