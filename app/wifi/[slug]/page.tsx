@@ -8,7 +8,8 @@ export default function WifiPage({ params }: { params: Promise<{ slug: string }>
   const [source, setSource] = useState<"qr" | "nfc" | "direct">("direct");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [connecting, setConnecting] = useState(false);
+  const [showConnectQr, setShowConnectQr] = useState(false);
+  const [qrFailed, setQrFailed] = useState(false);
   const [connectHelp, setConnectHelp] = useState("");
   const [device, setDevice] = useState<"ios" | "android" | "other">("other");
 
@@ -67,22 +68,19 @@ export default function WifiPage({ params }: { params: Promise<{ slug: string }>
       : "Browser tidak mengizinkan penyalinan otomatis. Buka halaman melalui HTTPS dan izinkan Clipboard, lalu coba lagi.");
   }
 
-  async function connectWifi() {
-    if (!card || connecting) return;
-    setConnecting(true);
-    try {
-      if (card.security_type.toLowerCase() === "open") {
-        setConnectHelp("Jaringan ini tidak memerlukan password. Buka pengaturan WiFi perangkat dan pilih nama jaringan di atas.");
-      } else {
-        const copiedNow = await copyNetworkPassword();
-        setConnectHelp(copiedNow
-          ? "Password berhasil disalin. Buka pengaturan WiFi perangkat, pilih jaringan di atas, dan tempel password."
-          : "Penyalinan password tidak didukung atau gagal. Buka melalui HTTPS, gunakan tombol Copy Password, lalu sambungkan dari pengaturan WiFi.");
-      }
-      // This is a connection-help interaction; it does not verify WiFi association.
+  function connectWifi() {
+    if (!card) return;
+    const next = !showConnectQr;
+    setShowConnectQr(next);
+    setQrFailed(false);
+    if (next) {
+      setConnectHelp(card.security_type.toLowerCase() === "open"
+        ? "Scan QR dengan kamera perangkat lain untuk bergabung ke jaringan Open. Jika memakai HP yang sama, buka Pengaturan WiFi dan pilih SSID di atas."
+        : "Scan QR dengan kamera perangkat lain untuk bergabung. Jika memakai HP yang sama, gunakan Copy Password lalu pilih SSID melalui Pengaturan WiFi.");
+      // Measures use of connection assistance, not actual WiFi association.
       void logEvent("wifi_connect");
-    } finally {
-      setConnecting(false);
+    } else {
+      setConnectHelp("");
     }
   }
 
@@ -93,9 +91,25 @@ export default function WifiPage({ params }: { params: Promise<{ slug: string }>
     {card.logo_url ? <img className="wifi-logo" src={card.logo_url} alt="" /> : <div className="wifi-icon">Wi</div>}
     <p className="wifi-eyebrow">WIFI ACCESS</p><h1>{card.business_name}</h1><p className="muted">Terhubung ke internet dengan mudah.</p>
     <div className="network-box"><span>Nama WiFi</span><strong>{card.ssid}</strong><small>{card.security_type}</small></div>
-    <div className="wifi-actions"><button className="copy-button" onClick={copyPassword} disabled={card.security_type.toLowerCase() === "open"}>{card.security_type.toLowerCase() === "open" ? "Tanpa Password" : copied ? "✓ Password Tersalin" : "Copy Password"}</button><button className="connect-button" onClick={connectWifi} disabled={connecting}>{connecting ? "Menyiapkan panduan…" : "Bantu Hubungkan WiFi"}</button></div>
+    <div className="wifi-actions">
+      {card.security_type.toLowerCase() !== "open" &&
+        <button className="copy-button" onClick={copyPassword}>
+          {copied ? "✓ Password Tersalin" : "Copy Password"}
+        </button>}
+      <button className="connect-button" onClick={connectWifi} aria-expanded={showConnectQr} aria-controls="wifi-connect-details">
+        {showConnectQr ? "Tutup QR WiFi" : "Bantu Hubungkan WiFi"}
+      </button>
+    </div>
+    {showConnectQr && <div id="wifi-connect-details" className="wifi-connect-panel">
+      <strong>Scan untuk terhubung ke WiFi</strong>
+      <p className="muted">QR ini berisi konfigurasi jaringan, bukan link halaman. Scan menggunakan kamera perangkat lain.</p>
+      {!qrFailed ? <img className="wifi-connect-qr" src={`/api/wifi/${encodeURIComponent(card.slug)}/connect-qr`} alt={`QR koneksi WiFi ${card.ssid}`} onError={() => setQrFailed(true)} /> :
+        <p role="alert">QR tidak tersedia. Gunakan cara manual melalui pengaturan WiFi perangkat.</p>}
+      <p className="muted">Menggunakan HP yang sama? Buka Pengaturan WiFi, pilih <strong>{card.ssid}</strong>{card.security_type.toLowerCase() === "open" ? " (tanpa password)." : ", kemudian tempel password yang disalin."}</p>
+      {card.security_type.toLowerCase() !== "open" && <p className="muted">QR untuk jaringan berpassword mengandung kredensial WiFi. Jangan bagikan atau simpan gambarnya sembarangan.</p>}
+    </div>}
     {connectHelp && <div role="status" className="device-tip"><p>{connectHelp}</p></div>}
-    {card.instructions && <div className="instructions"><strong>Cara terhubung</strong><p>{card.instructions}</p></div>}<div className="device-tip"><strong>{device === "ios" ? "iPhone / iPad" : device === "android" ? "Android" : "HP / Laptop"}</strong><p>{device === "ios" ? "Tap Bantu Hubungkan WiFi untuk menyalin password, lalu pilih jaringan ini di Settings → Wi-Fi." : device === "android" ? "Tap Bantu Hubungkan WiFi untuk menyalin password, lalu pilih jaringan ini di pengaturan Wi-Fi." : "Tap Bantu Hubungkan WiFi lalu pilih jaringan ini di pengaturan Wi-Fi perangkat."}</p></div>
+    {card.instructions && <div className="instructions"><strong>Cara terhubung</strong><p>{card.instructions}</p></div>}<div className="device-tip"><strong>{device === "ios" ? "iPhone / iPad" : device === "android" ? "Android" : "HP / Laptop"}</strong><p>{device === "ios" ? "Tampilkan QR WiFi untuk perangkat lain, atau pilih jaringan ini di Settings → Wi-Fi." : device === "android" ? "Tampilkan QR WiFi untuk perangkat lain, atau pilih jaringan ini di pengaturan Wi-Fi." : "Tampilkan QR WiFi untuk perangkat lain, atau pilih jaringan ini di pengaturan Wi-Fi."}</p></div>
     <p className="wifi-footer">WiV1 · WiFi access made simple</p>
   </div></main>;
 }
