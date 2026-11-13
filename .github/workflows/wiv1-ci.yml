@@ -39,6 +39,8 @@ jobs:
         run: npm install --no-audit --no-fund --package-lock=false
       - name: Validate read-only preview smoke script
         run: node --check scripts/staging-smoke.mjs
+      - name: WiFi QR format regression tests
+        run: node --experimental-strip-types --test tests/wifi-qr.test.mjs
       - name: TypeScript validation
         run: npx tsc --noEmit
       - name: Production build (CI placeholder env, no live data)
