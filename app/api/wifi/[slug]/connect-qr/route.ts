@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import QRCode from "qrcode";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { decryptSecret } from "@/lib/crypto";
+import { buildWifiQrPayload } from "@/lib/wifi-qr";
 
 export const dynamic = "force-dynamic";
 
@@ -10,11 +11,6 @@ const privateHeaders = {
   Pragma: "no-cache",
   "X-Content-Type-Options": "nosniff",
 };
-
-// WiFi QR format: WIFI:T:WPA;S:<ssid>;P:<password>;; or WIFI:T:nopass;S:<ssid>;;
-function escapeWifiValue(value: string) {
-  return value.replace(/([\\;,":])/g, "\\$1");
-}
 
 export async function GET(_: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -38,9 +34,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ slug: stri
       return NextResponse.json({ error: "Unsupported WiFi security" }, { status: 422, headers: privateHeaders });
     }
     const password = open ? "" : decryptSecret(network.encrypted_password);
-    const payload = open
-      ? `WIFI:T:nopass;S:${escapeWifiValue(network.ssid)};;`
-      : `WIFI:T:WPA;S:${escapeWifiValue(network.ssid)};P:${escapeWifiValue(password)};;`;
+    const payload = buildWifiQrPayload(network.ssid, network.security_type as "Open" | "WPA2" | "WPA3", password);
 
     const png = await QRCode.toBuffer(payload, { type: "png", width: 520, margin: 2, errorCorrectionLevel: "M" });
     return new NextResponse(Uint8Array.from(png), {
