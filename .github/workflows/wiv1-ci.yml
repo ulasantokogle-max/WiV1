@@ -1,0 +1,90 @@
+name: WiV1 V0.6 branch checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "lib/**"
+      - "types/**"
+      - "supabase/**"
+      - "tests/**"
+      - "scripts/**"
+      - "package.json"
+      - "tsconfig.json"
+      - ".github/workflows/wiv1-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-key
+      WIV1_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      NEXT_PUBLIC_WIV1_BASE_URL: https://example.com
+      WIV1_BASE_URL: https://example.com
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies without changing the repository
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Validate read-only preview smoke script
+        run: node --check scripts/staging-smoke.mjs
+      - name: WiFi QR format regression tests
+        run: node --experimental-strip-types --test tests/wifi-qr.test.mjs
+      - name: TypeScript validation
+        run: npx tsc --noEmit
+      - name: Production build (CI placeholder env, no live data)
+        run: npm run build
+
+  database-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: wiv1_qa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d wiv1_qa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: ci-only-password
+      PGDATABASE: wiv1_qa
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bootstrap Supabase auth objects for disposable PostgreSQL
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          create role anon nologin;
+          create role authenticated nologin;
+          create role service_role nologin bypassrls;
+          create schema auth;
+          create table auth.users (id uuid primary key);
+          create function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
+          SQL
+      - name: Apply WiV1 migrations to disposable database
+        run: |
+          psql -v ON_ERROR_STOP=1 -f supabase/001_initial_schema.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/002_v06_atomic_and_events.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/003_v06_trigger_search_path.sql
+      - name: Verify atomic rollback, rate limits and RPC permissions
+        run: psql -v ON_ERROR_STOP=1 -f tests/v06-database.sql

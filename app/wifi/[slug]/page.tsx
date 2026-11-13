@@ -8,7 +8,9 @@ export default function WifiPage({ params }: { params: Promise<{ slug: string }>
   const [source, setSource] = useState<"qr" | "nfc" | "direct">("direct");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [connecting, setConnecting] = useState(false);
+  const [showConnectQr, setShowConnectQr] = useState(false);
+  const [qrFailed, setQrFailed] = useState(false);
+  const [connectHelp, setConnectHelp] = useState("");
   const [device, setDevice] = useState<"ios" | "android" | "other">("other");
 
   useEffect(() => {
@@ -25,42 +27,60 @@ export default function WifiPage({ params }: { params: Promise<{ slug: string }>
         if (!json.success) { if (!cancelled) setError(json.error ?? "WiFi tidak tersedia"); return; }
         if (cancelled) return;
         setCard(json.data);
-        await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardId: json.data.id, eventType: eventSource === "qr" ? "qr_scan" : eventSource === "nfc" ? "nfc_scan" : "page_view", source: eventSource }) });
+        void fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardId: json.data.id, eventType: eventSource === "qr" ? "qr_scan" : eventSource === "nfc" ? "nfc_scan" : "page_view", source: eventSource }) }).catch(() => {});
       } catch { if (!cancelled) setError("Koneksi bermasalah. Silakan coba lagi."); }
     });
     return () => { cancelled = true; };
   }, [params]);
 
-  async function copyPassword() {
+  async function logEvent(eventType: "password_copy" | "wifi_connect") {
     if (!card) return;
-    const response = await fetch(`/api/wifi/${encodeURIComponent(card.slug)}/secret`, { cache: "no-store" });
-    const json = await response.json();
-    if (!json.success) return;
-    await navigator.clipboard.writeText(json.data.password);
-    setCopied(true);
-    await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardId: card.id, eventType: "password_copy", source }) });
-    setTimeout(() => setCopied(false), 1800);
+    // Analytics must never block the user from connecting.
+    await fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardId: card.id, eventType, source }),
+    }).catch(() => {});
   }
 
-  function wifiEscape(value: string) {
-    return value.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/:/g, "\\:");
-  }
-
-  async function connectWifi() {
-    if (!card || connecting) return;
-    setConnecting(true);
+  async function copyNetworkPassword(): Promise<boolean> {
+    if (!card || card.security_type.toLowerCase() === "open") return false;
     try {
       const response = await fetch(`/api/wifi/${encodeURIComponent(card.slug)}/secret`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Secret endpoint unavailable");
       const json = await response.json();
-      if (!json.success) throw new Error(json.error || "Password WiFi tidak tersedia");
-      const password = json.data.password || "";
-      const type = card.security_type.toLowerCase() === "open" ? "nopass" : "WPA";
-      const wifiUri = `WIFI:T:${type};S:${wifiEscape(card.ssid)};P:${wifiEscape(password)};;`;
-      await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardId: card.id, eventType: "wifi_connect", source }) });
-      window.location.href = wifiUri;
+      if (!json.success || typeof json.data?.password !== "string") throw new Error("Invalid WiFi response");
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(json.data.password);
+      setCopied(true);
+      void logEvent("password_copy");
+      return true;
     } catch {
-      setConnecting(false);
-      setError("Koneksi WiFi otomatis tidak tersedia di browser ini. Gunakan tombol Copy Password lalu sambungkan dari pengaturan WiFi.");
+      setCopied(false);
+      return false;
+    }
+  }
+
+  async function copyPassword() {
+    const ok = await copyNetworkPassword();
+    setConnectHelp(ok
+      ? "Password disalin. Buka pengaturan WiFi, pilih jaringan di atas, lalu tempel password."
+      : "Browser tidak mengizinkan penyalinan otomatis. Buka halaman melalui HTTPS dan izinkan Clipboard, lalu coba lagi.");
+  }
+
+  function connectWifi() {
+    if (!card) return;
+    const next = !showConnectQr;
+    setShowConnectQr(next);
+    setQrFailed(false);
+    if (next) {
+      setConnectHelp(card.security_type.toLowerCase() === "open"
+        ? "Scan QR dengan kamera perangkat lain untuk bergabung ke jaringan Open. Jika memakai HP yang sama, buka Pengaturan WiFi dan pilih SSID di atas."
+        : "Scan QR dengan kamera perangkat lain untuk bergabung. Jika memakai HP yang sama, gunakan Copy Password lalu pilih SSID melalui Pengaturan WiFi.");
+      // Measures use of connection assistance, not actual WiFi association.
+      void logEvent("wifi_connect");
+    } else {
+      setConnectHelp("");
     }
   }
 
@@ -71,8 +91,25 @@ export default function WifiPage({ params }: { params: Promise<{ slug: string }>
     {card.logo_url ? <img className="wifi-logo" src={card.logo_url} alt="" /> : <div className="wifi-icon">Wi</div>}
     <p className="wifi-eyebrow">WIFI ACCESS</p><h1>{card.business_name}</h1><p className="muted">Terhubung ke internet dengan mudah.</p>
     <div className="network-box"><span>Nama WiFi</span><strong>{card.ssid}</strong><small>{card.security_type}</small></div>
-    <div className="wifi-actions"><button className="copy-button" onClick={copyPassword}>{copied ? "✓ Password Tersalin" : "Copy Password"}</button><button className="connect-button" onClick={connectWifi} disabled={connecting}>{connecting ? "Membuka koneksi…" : "Connect WiFi"}</button></div>
-    {card.instructions && <div className="instructions"><strong>Cara terhubung</strong><p>{card.instructions}</p></div>}<div className="device-tip"><strong>{device === "ios" ? "iPhone / iPad" : device === "android" ? "Android" : "HP / Laptop"}</strong><p>{device === "ios" ? "Tap Connect WiFi. Jika perangkat tidak membuka koneksi otomatis, copy password lalu pilih jaringan ini di Settings → Wi‑Fi." : device === "android" ? "Tap Connect WiFi. Jika perangkat tidak membuka koneksi otomatis, copy password lalu pilih jaringan ini di Wi‑Fi." : "Tap Connect WiFi bila perangkat mendukung WiFi URI. Jika tidak, copy password dan sambungkan dari menu WiFi."}</p></div>
+    <div className="wifi-actions">
+      {card.security_type.toLowerCase() !== "open" &&
+        <button className="copy-button" onClick={copyPassword}>
+          {copied ? "✓ Password Tersalin" : "Copy Password"}
+        </button>}
+      <button className="connect-button" onClick={connectWifi} aria-expanded={showConnectQr} aria-controls="wifi-connect-details">
+        {showConnectQr ? "Tutup QR WiFi" : "Bantu Hubungkan WiFi"}
+      </button>
+    </div>
+    {showConnectQr && <div id="wifi-connect-details" className="wifi-connect-panel">
+      <strong>Scan untuk terhubung ke WiFi</strong>
+      <p className="muted">QR ini berisi konfigurasi jaringan, bukan link halaman. Scan menggunakan kamera perangkat lain.</p>
+      {!qrFailed ? <img className="wifi-connect-qr" src={`/api/wifi/${encodeURIComponent(card.slug)}/connect-qr`} alt={`QR koneksi WiFi ${card.ssid}`} onError={() => setQrFailed(true)} /> :
+        <p role="alert">QR tidak tersedia. Gunakan cara manual melalui pengaturan WiFi perangkat.</p>}
+      <p className="muted">Menggunakan HP yang sama? Buka Pengaturan WiFi, pilih <strong>{card.ssid}</strong>{card.security_type.toLowerCase() === "open" ? " (tanpa password)." : ", kemudian tempel password yang disalin."}</p>
+      {card.security_type.toLowerCase() !== "open" && <p className="muted">QR untuk jaringan berpassword mengandung kredensial WiFi. Jangan bagikan atau simpan gambarnya sembarangan.</p>}
+    </div>}
+    {connectHelp && <div role="status" className="device-tip"><p>{connectHelp}</p></div>}
+    {card.instructions && <div className="instructions"><strong>Cara terhubung</strong><p>{card.instructions}</p></div>}<div className="device-tip"><strong>{device === "ios" ? "iPhone / iPad" : device === "android" ? "Android" : "HP / Laptop"}</strong><p>{device === "ios" ? "Tampilkan QR WiFi untuk perangkat lain, atau pilih jaringan ini di Settings → Wi-Fi." : device === "android" ? "Tampilkan QR WiFi untuk perangkat lain, atau pilih jaringan ini di pengaturan Wi-Fi." : "Tampilkan QR WiFi untuk perangkat lain, atau pilih jaringan ini di pengaturan Wi-Fi."}</p></div>
     <p className="wifi-footer">WiV1 · WiFi access made simple</p>
   </div></main>;
 }

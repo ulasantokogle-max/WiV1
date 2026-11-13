@@ -33,6 +33,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
     if (cardError) throw cardError;
     if (!card) return NextResponse.json({ success: false, data: null, error: "Kartu tidak ditemukan" }, { status: 404 });
 
+    // Open networks must not retain the previous encrypted WPA password.
+    // Switching from Open to WPA requires an explicit new password.
+    const { data: currentNetwork, error: currentNetworkError } = await supabaseAdmin
+      .from("wifi_networks").select("security_type").eq("card_id", card.id).single();
+    if (currentNetworkError) throw currentNetworkError;
+    if (body.securityType && body.securityType !== "Open" &&
+        currentNetwork.security_type === "Open" && !body.password) {
+      return NextResponse.json({ success: false, data: null, error: "Password wajib saat mengubah Open ke WPA" }, { status: 400 });
+    }
+
     if (body.status) {
       const { error } = await supabaseAdmin.from("wifi_cards").update({ status: body.status }).eq("id", card.id);
       if (error) throw error;
@@ -50,7 +60,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
     if (body.ssid !== undefined) networkUpdate.ssid = body.ssid;
     if (body.securityType !== undefined) networkUpdate.security_type = body.securityType;
     if (body.instructions !== undefined) networkUpdate.instructions = body.instructions || null;
-    if (body.password) networkUpdate.encrypted_password = encryptSecret(body.password);
+    if (body.securityType === "Open") networkUpdate.encrypted_password = encryptSecret("");
+    else if (body.password) networkUpdate.encrypted_password = encryptSecret(body.password);
     if (Object.keys(networkUpdate).length) {
       const { error } = await supabaseAdmin.from("wifi_networks").update(networkUpdate).eq("card_id", card.id);
       if (error) throw error;

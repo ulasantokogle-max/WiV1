@@ -11,9 +11,13 @@ const schema = z.object({
   cardCode: z.string().regex(/^[A-Z0-9-]{3,40}$/),
   slug: z.string().regex(/^[a-z0-9-]{3,60}$/),
   ssid: z.string().min(1).max(100),
-  password: z.string().min(1).max(200),
+  password: z.string().max(200),
   securityType: z.enum(["WPA2", "WPA3", "Open"]).default("WPA2"),
   instructions: z.string().max(2000).optional().or(z.literal("")),
+}).superRefine((value, ctx) => {
+  if (value.securityType !== "Open" && !value.password) {
+    ctx.addIssue({ code: "custom", path: ["password"], message: "Password wajib untuk WPA2/WPA3" });
+  }
 });
 
 async function requireAdmin() {
@@ -72,19 +76,35 @@ export async function POST(request: Request) {
     if (!admin) return NextResponse.json({ success: false, data: null, error: "Unauthorized" }, { status: 401 });
     const body = schema.parse(await request.json());
 
-    const { data: business, error: businessError } = await supabaseAdmin.from("businesses").insert({ name: body.businessName }).select("id").single();
-    if (businessError) throw businessError;
-    const { data: location, error: locationError } = await supabaseAdmin.from("locations").insert({ business_id: business.id, name: body.locationName, address: body.address || null }).select("id").single();
-    if (locationError) throw locationError;
-    const { data: card, error: cardError } = await supabaseAdmin.from("wifi_cards").insert({ business_id: business.id, location_id: location.id, card_code: body.cardCode, slug: body.slug, status: "active" }).select("id, card_code, slug, status").single();
-    if (cardError) throw cardError;
-    const { error: networkError } = await supabaseAdmin.from("wifi_networks").insert({ card_id: card.id, ssid: body.ssid, encrypted_password: encryptSecret(body.password), security_type: body.securityType, instructions: body.instructions || null });
-    if (networkError) throw networkError;
+    // A single Postgres RPC guarantees all four inserts commit or roll back together.
+    // Deploy supabase/002_v06_atomic_and_events.sql before using this route.
+    const { data: card, error: createError } = await supabaseAdmin.rpc("wiv1_create_card_atomic", {
+      p_business_name: body.businessName,
+      p_location_name: body.locationName,
+      p_address: body.address || "",
+      p_card_code: body.cardCode,
+      p_slug: body.slug,
+      p_ssid: body.ssid,
+      p_encrypted_password: encryptSecret(body.securityType === "Open" ? "" : body.password),
+      p_security_type: body.securityType,
+      p_instructions: body.instructions || "",
+    });
+    if (createError) {
+      // 23505 is a PostgreSQL unique violation (card code or slug).
+      if (createError.code === "23505") {
+        return NextResponse.json({ success: false, data: null, error: "Kode kartu atau slug sudah digunakan" }, { status: 409 });
+      }
+      console.error("WiV1 atomic create RPC unavailable", createError);
+      return NextResponse.json({ success: false, data: null, error: "Layanan pembuatan kartu belum tersedia" }, { status: 503 });
+    }
 
     return NextResponse.json({ success: true, data: card, error: null }, { status: 201 });
   } catch (error) {
     console.error("WiV1 admin card create", error);
-    const message = error instanceof z.ZodError ? "Data kartu tidak valid" : "Gagal membuat kartu";
-    return NextResponse.json({ success: false, data: null, error: message }, { status: 400 });
+    const invalidInput = error instanceof z.ZodError || error instanceof SyntaxError;
+    return NextResponse.json({
+      success: false, data: null,
+      error: invalidInput ? "Data kartu tidak valid" : "Layanan pembuatan kartu belum tersedia",
+    }, { status: invalidInput ? 400 : 503 });
   }
 }
