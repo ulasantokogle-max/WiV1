@@ -3,6 +3,7 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { encryptSecret } from "@/lib/crypto";
+import { isValidProtectedWifiPassword } from "@/lib/wifi-validation";
 
 const schema = z.object({
   status: z.enum(["active", "inactive", "suspended"]).optional(),
@@ -28,6 +29,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
     if (!(await requireAdmin())) return NextResponse.json({ success: false, data: null, error: "Unauthorized" }, { status: 401 });
     const { slug } = await params;
     const body = schema.parse(await request.json());
+    if (body.securityType !== "Open" && body.password && !isValidProtectedWifiPassword(body.password)) {
+      return NextResponse.json({ success: false, data: null, error: "Password WPA2/WPA3 harus 8–63 byte atau 64 digit hex" }, { status: 400 });
+    }
 
     const { data: card, error: cardError } = await supabaseAdmin.from("wifi_cards").select("id,business_id,location_id,slug").eq("slug", slug).maybeSingle();
     if (cardError) throw cardError;
