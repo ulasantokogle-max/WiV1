@@ -3,6 +3,7 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { encryptSecret } from "@/lib/crypto";
+import { isValidProtectedWifiPassword } from "@/lib/wifi-validation";
 
 const schema = z.object({
   businessName: z.string().min(2).max(120),
@@ -15,8 +16,8 @@ const schema = z.object({
   securityType: z.enum(["WPA2", "WPA3", "Open"]).default("WPA2"),
   instructions: z.string().max(2000).optional().or(z.literal("")),
 }).superRefine((value, ctx) => {
-  if (value.securityType !== "Open" && !value.password) {
-    ctx.addIssue({ code: "custom", path: ["password"], message: "Password wajib untuk WPA2/WPA3" });
+  if (value.securityType !== "Open" && !isValidProtectedWifiPassword(value.password)) {
+    ctx.addIssue({ code: "custom", path: ["password"], message: "Password WPA2/WPA3 harus 8–63 byte atau 64 digit hex" });
   }
 });
 
