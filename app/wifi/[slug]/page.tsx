@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { PublicWifiCard } from "@/types/wiv1";
+import { classifyWifiVisit } from "@/lib/wifi-visit";
 
 export default function WifiPage({ params }: { params: Promise<{ slug: string }> }) {
   const [card, setCard] = useState<PublicWifiCard | null>(null);
@@ -19,15 +20,15 @@ export default function WifiPage({ params }: { params: Promise<{ slug: string }>
     let cancelled = false;
     params.then(async ({ slug }) => {
       const querySource = new URLSearchParams(window.location.search).get("src");
-      const eventSource = querySource === "qr" || querySource === "nfc" ? querySource : "direct";
-      setSource(eventSource);
+      const visit = classifyWifiVisit(querySource);
+      setSource(visit.source);
       try {
         const response = await fetch(`/api/wifi/${encodeURIComponent(slug)}`, { cache: "no-store" });
         const json = await response.json();
         if (!json.success) { if (!cancelled) setError(json.error ?? "WiFi tidak tersedia"); return; }
         if (cancelled) return;
         setCard(json.data);
-        void fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardId: json.data.id, eventType: eventSource === "qr" ? "qr_scan" : eventSource === "nfc" ? "nfc_scan" : "page_view", source: eventSource }) }).catch(() => {});
+        void fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardId: json.data.id, eventType: visit.eventType, source: visit.source }) }).catch(() => {});
       } catch { if (!cancelled) setError("Koneksi bermasalah. Silakan coba lagi."); }
     });
     return () => { cancelled = true; };
