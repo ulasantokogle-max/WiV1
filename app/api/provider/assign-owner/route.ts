@@ -25,6 +25,7 @@ export async function POST(request: Request) {
     if (!data?.assigned) {
       return NextResponse.json({ success: false,
         error: data?.reason === "provider_account" ? "Gunakan akun client, bukan akun provider" :
+          data?.reason === "already_owned" ? "Bisnis sudah memiliki owner. Perubahan kepemilikan memerlukan persetujuan owner." :
           "Akun client belum ditemukan atau email belum diverifikasi",
       }, { status: 422 });
     }
