@@ -16,7 +16,7 @@ export default function AnalyticsPage() {
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getUser();
-      if (!data.user) { router.replace("/admin"); return; }
+      if (!data.user) { router.replace("/provider"); return; }
       const res = await fetch("/api/admin/analytics", { cache: "no-store" });
       const json = await res.json();
       if (!json.success) setError(json.error || "Gagal memuat analytics");
@@ -29,7 +29,7 @@ export default function AnalyticsPage() {
 
   if (loading) return <main className="container page"><p>Loading analytics…</p></main>;
   return <main className="container page">
-    <header className="dashboard-head"><div><p className="eyebrow">WIV1 / ANALYTICS</p><h1>Performance</h1><p className="muted">Ringkasan aktivitas semua WiFi Card.</p></div><button className="secondary" onClick={() => router.push("/admin")}>← Dashboard</button></header>
+    <header className="dashboard-head"><div><p className="eyebrow">WIV1 / ANALYTICS</p><h1>Performance</h1><p className="muted">Ringkasan aktivitas semua WiFi Card.</p></div><button className="secondary" onClick={() => router.push("/provider")}>← Dashboard</button></header>
     {error && <div className="panel error" style={{marginBottom:18}}>{error}</div>}
     <section className="stats-grid"><Stat label="Page Views" value={totals.views}/><Stat label="QR Scans" value={totals.qr}/><Stat label="NFC Scans" value={totals.nfc}/><Stat label="Password Copies" value={totals.copies}/><Stat label="Connect Attempts" value={totals.connects}/></section>
     <section className="panel"><div className="panel-head"><div><h2>Per Card</h2><p className="muted">Data event tersimpan dari QR, NFC, dan landing page.</p></div></div>
