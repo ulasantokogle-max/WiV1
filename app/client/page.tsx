@@ -155,6 +155,7 @@ export default function ClientDashboard() {
         <td><button className="secondary small" onClick={() => selectCard(card)}>Kelola WiFi</button>
           <a className="button small secondary" style={{ marginLeft: 8 }} target="_blank" rel="noreferrer" href={"/wifi/" + encodeURIComponent(card.slug)}>Lihat Publik</a>
           <a className="button small secondary" style={{ marginLeft: 8 }} href={"/api/qr/" + encodeURIComponent(card.slug)} download={card.card_code + "-QR.png"}>Download QR</a>
+          <a className="button small secondary" style={{ marginLeft: 8 }} target="_blank" rel="noreferrer" href={"/client/cards/" + encodeURIComponent(card.slug) + "/print"}>Print Card</a>
           <button className="small secondary" style={{ marginLeft: 8, marginTop: 6 }} onClick={() => void copyNfcUrl(card.slug)}>Copy NFC URL</button></td>
       </tr>)}</tbody></table></div>
     </section>)}
