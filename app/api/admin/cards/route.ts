@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { createSupabaseServer } from "@/lib/supabase-server";
+import { requireWiV1Provider, isWiV1BusinessOwned } from "@/lib/wiv1-access";
 import { encryptSecret } from "@/lib/crypto";
 import { isValidProtectedWifiPassword } from "@/lib/wifi-validation";
 
@@ -21,17 +21,9 @@ const schema = z.object({
   }
 });
 
-async function requireAdmin() {
-  const supabase = await createSupabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data: admin } = await supabaseAdmin.from("admin_users").select("user_id, role").eq("user_id", user.id).maybeSingle();
-  return admin ? { user, role: admin.role } : null;
-}
-
 export async function GET() {
   try {
-    const admin = await requireAdmin();
+    const admin = await requireWiV1Provider();
     if (!admin) return NextResponse.json({ success: false, data: null, error: "Unauthorized" }, { status: 401 });
 
     const { data: cards, error } = await supabaseAdmin
@@ -40,6 +32,12 @@ export async function GET() {
       .order("created_at", { ascending: false });
     if (error) throw error;
 
+    const businessIds = [...new Set((cards ?? []).map(card => card.business_id))];
+    const { data: assignments, error: assignmentsError } = businessIds.length ?
+      await supabaseAdmin.from("wiv1_business_owners").select("business_id").in("business_id", businessIds) : { data: [], error: null };
+    if (assignmentsError) throw assignmentsError;
+    const owned = new Set((assignments ?? []).map(item => item.business_id));
+    const cardsWithOwnership = (cards ?? []).map(card => ({ ...card, assigned: owned.has(card.business_id) }));
     const cardIds = (cards ?? []).map((card) => card.id);
     let events: Array<{ card_id: string; event_type: string; source: string; created_at: string }> = [];
     if (cardIds.length) {
@@ -64,7 +62,7 @@ export async function GET() {
       }];
     }));
 
-    return NextResponse.json({ success: true, data: { cards: cards ?? [], analytics }, error: null });
+    return NextResponse.json({ success: true, data: { cards: cardsWithOwnership, analytics }, error: null });
   } catch (error) {
     console.error("WiV1 admin cards GET", error);
     return NextResponse.json({ success: false, data: null, error: "Gagal memuat kartu" }, { status: 500 });
