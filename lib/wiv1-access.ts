@@ -19,9 +19,11 @@ export async function requireWiV1Provider() {
 export async function requireWiV1Client() {
   const user = await currentWiV1User();
   if (!user) return null;
-  const { data: provider } = await supabaseAdmin.from("admin_users")
+  const { data: provider, error } = await supabaseAdmin.from("admin_users")
     .select("role").eq("user_id", user.id).maybeSingle();
-  return provider?.role === "admin" ? null : user;
+  // Fail closed on lookup errors; never infer a Client role from a failed provider check.
+  if (error || provider?.role === "admin") return null;
+  return user;
 }
 
 export async function ownedWiV1BusinessIds(userId: string): Promise<string[]> {
