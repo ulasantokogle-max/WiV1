@@ -78,7 +78,7 @@ jobs:
           create role authenticated nologin;
           create role service_role nologin bypassrls;
           create schema auth;
-          create table auth.users (id uuid primary key);
+          create table auth.users (id uuid primary key, email text, email_confirmed_at timestamptz);
           create function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
           SQL
       - name: Apply WiV1 migrations to disposable database
@@ -86,5 +86,8 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/001_initial_schema.sql
           psql -v ON_ERROR_STOP=1 -f supabase/002_v06_atomic_and_events.sql
           psql -v ON_ERROR_STOP=1 -f supabase/003_v06_trigger_search_path.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/004_provider_client_separation.sql
       - name: Verify atomic rollback, rate limits and RPC permissions
-        run: psql -v ON_ERROR_STOP=1 -f tests/v06-database.sql
+        run: |
+          psql -v ON_ERROR_STOP=1 -f tests/v06-database.sql
+          psql -v ON_ERROR_STOP=1 -f tests/v07-provider-client.sql
