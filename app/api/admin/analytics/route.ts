@@ -1,18 +1,10 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { createSupabaseServer } from "@/lib/supabase-server";
-
-async function requireAdmin() {
-  const supabase = await createSupabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return false;
-  const { data } = await supabaseAdmin.from("admin_users").select("user_id").eq("user_id", user.id).maybeSingle();
-  return !!data;
-}
+import { requireWiV1Provider } from "@/lib/wiv1-access";
 
 export async function GET() {
   try {
-    if (!(await requireAdmin())) return NextResponse.json({ success:false, data:null, error:"Unauthorized" }, {status:401});
+    if (!(await requireWiV1Provider())) return NextResponse.json({ success:false, data:null, error:"Unauthorized" }, {status:401});
     const { data: cards, error: cardError } = await supabaseAdmin.from("wifi_cards").select("id,card_code,slug,businesses(name)").order("created_at", {ascending:false});
     if (cardError) throw cardError;
     const ids = (cards ?? []).map(c => c.id);
