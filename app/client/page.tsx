@@ -19,6 +19,8 @@ export default function ClientDashboard() {
   const [register, setRegister] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [cards, setCards] = useState<Card[]>([]);
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -51,6 +53,8 @@ export default function ClientDashboard() {
   async function authenticate(event: FormEvent) {
     event.preventDefault(); setMessage("");
     if (register) {
+      if (password.length < 8) { setMessage("Password minimal 8 karakter."); return; }
+      if (password !== confirmPassword) { setMessage("Konfirmasi password belum sama."); return; }
       const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin + "/client" } });
       setMessage(error ? error.message : "Pendaftaran dikirim. Verifikasi email, lalu masuk. Provider harus menghubungkan akun ini ke bisnis Anda.");
       return;
@@ -90,7 +94,16 @@ export default function ClientDashboard() {
     <p className="muted">Dashboard pribadi untuk melihat kartu, statistik, dan mengatur WiFi bisnis Anda.</p>
     <form className="form" onSubmit={authenticate}>
       <input required type="email" placeholder="Email owner" value={email} onChange={event => setEmail(event.target.value)}/>
-      <input required type="password" minLength={6} placeholder="Password" value={password} onChange={event => setPassword(event.target.value)}/>
+      <input required type={showPassword ? "text" : "password"} minLength={register ? 8 : undefined}
+        autoComplete={register ? "new-password" : "current-password"} placeholder="Password"
+        value={password} onChange={event => setPassword(event.target.value)}/>
+      {register && <input required type={showPassword ? "text" : "password"} minLength={8}
+        autoComplete="new-password" placeholder="Ulangi password" value={confirmPassword}
+        onChange={event => setConfirmPassword(event.target.value)}/>}
+      <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,color:"#475467"}}>
+        <input type="checkbox" checked={showPassword} onChange={event => setShowPassword(event.target.checked)}
+          style={{width:16,height:16}}/> Tampilkan password
+      </label>
       <button type="submit">{register ? "Daftar & Verifikasi Email" : "Masuk ke Dashboard Client"}</button>
     </form>
     <button className="secondary" style={{ marginTop: 12, width: "100%" }} onClick={() => { setRegister(!register); setMessage(""); }}>
