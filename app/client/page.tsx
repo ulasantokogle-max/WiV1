@@ -17,6 +17,8 @@ export default function ClientDashboard() {
   const [loading, setLoading] = useState(true);
   const [loggedIn, setLoggedIn] = useState(false);
   const [register, setRegister] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [submittingAuth, setSubmittingAuth] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -51,18 +53,48 @@ export default function ClientDashboard() {
   }, [supabase]);
 
   async function authenticate(event: FormEvent) {
-    event.preventDefault(); setMessage("");
-    if (register) {
-      if (password.length < 8) { setMessage("Password minimal 8 karakter."); return; }
-      if (password !== confirmPassword) { setMessage("Konfirmasi password belum sama."); return; }
-      const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin + "/client" } });
-      setMessage(error ? error.message : "Pendaftaran dikirim. Verifikasi email, lalu masuk. Provider harus menghubungkan akun ini ke bisnis Anda.");
-      return;
+    event.preventDefault();
+    if (submittingAuth) return;
+    setSubmittingAuth(true);
+    setMessage("");
+    try {
+      if (register) {
+        if (password.length < 8) { setMessage("Password minimal 8 karakter."); return; }
+        if (password !== confirmPassword) { setMessage("Konfirmasi password belum sama."); return; }
+        const { error } = await supabase.auth.signUp({
+          email: email.trim(), password,
+          options: { emailRedirectTo: window.location.origin + "/auth/callback" },
+        });
+        if (error) { setMessage(error.message); return; }
+        setPassword(""); setConfirmPassword(""); setVerificationSent(true);
+        return;
+      }
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) { setMessage(error.message); return; }
+      setPassword(""); setLoggedIn(true); await load();
+    } catch {
+      setMessage("Tidak dapat menghubungi layanan login WiV1. Periksa koneksi internet dan coba lagi.");
+    } finally {
+      setSubmittingAuth(false);
     }
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) { setMessage(error.message); return; }
-    setLoggedIn(true); await load();
   }
+
+  async function resendVerification() {
+    if (submittingAuth || !email.trim()) return;
+    setSubmittingAuth(true); setMessage("");
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup", email: email.trim(),
+        options: { emailRedirectTo: window.location.origin + "/auth/callback" },
+      });
+      setMessage(error ? error.message : "Jika akun masih membutuhkan verifikasi, tautan baru telah dikirim. Periksa Inbox dan Spam.");
+    } catch {
+      setMessage("Gagal menghubungi layanan email. Coba lagi atau masuk jika sudah terverifikasi.");
+    } finally {
+      setSubmittingAuth(false);
+    }
+  }
+
   function selectCard(card: Card) {
     setSelected(card.slug); setMessage("");
     setEdit({ ssid: card.wifi_networks?.ssid || "", password: "",
@@ -99,6 +131,35 @@ export default function ClientDashboard() {
   }), { views: 0, qr: 0, nfc: 0 });
   if (loading) return <main className="container page"><p>Memuat dashboard client…</p></main>;
 
+  if (!loggedIn && verificationSent) return <main className="auth-page" style={{ padding: "24px 16px" }}>
+    <section className="auth-card" style={{ width: "100%", maxWidth: 460, padding: "34px 30px" }}>
+      <div className="brand-mark" style={{ width: 44, height: 44, borderRadius: 12, marginBottom: 22 }}>Wi</div>
+      <p className="eyebrow">WIV1 · VERIFIKASI AKUN</p>
+      <div style={{ borderRadius: "50%", background: "#eaf1fe", color: "#163c83", fontSize: 25,
+        display: "grid", placeItems: "center", width: 54, height: 54, margin: "18px 0" }}>✉</div>
+      <h1 style={{ fontSize: 26, lineHeight: 1.2, marginBottom: 10 }}>Periksa email Anda</h1>
+      <p className="muted" style={{ lineHeight: 1.7 }}>Kami telah memproses permintaan pendaftaran untuk:</p>
+      <div style={{ padding: "14px 16px", border: "1px solid #e2e8f0", borderRadius: 12,
+        fontWeight: 750, margin: "14px 0 22px", overflowWrap: "anywhere", background: "#f8fafc" }}>{email.trim()}</div>
+      <div style={{ display: "grid", gap: 12, marginBottom: 24 }}>
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>1. Buka Inbox atau folder Spam.</p>
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>2. Klik tombol verifikasi dalam email WiV1 / Supabase Auth.</p>
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>3. Kembali dan masuk ke Dashboard Client.</p>
+      </div>
+      <button type="button" style={{ width: "100%" }} onClick={() => {
+        setVerificationSent(false); setRegister(false); setMessage("");
+      }}>Sudah Verifikasi? Masuk Client</button>
+      <button type="button" className="secondary" style={{ width: "100%", marginTop: 10 }}
+        onClick={() => void resendVerification()} disabled={submittingAuth}>
+        {submittingAuth ? "Mengirim…" : "Kirim Ulang Email Verifikasi"}
+      </button>
+      {message && <div className="device-tip" role="status" style={{ marginTop: 12 }}>{message}</div>}
+      <p className="muted" style={{ fontSize: 12, lineHeight: 1.6, marginTop: 20 }}>
+        Jika tautan lama membuka localhost, akun mungkin sudah terverifikasi. Coba masuk terlebih dahulu.
+      </p>
+    </section>
+  </main>;
+
   if (!loggedIn) return <main className="auth-page"><div className="auth-card">
     <div className="brand-mark">Wi</div><p className="eyebrow">WIV1 / CLIENT</p>
     <h1>{register ? "Daftar Owner Bisnis" : "Masuk Client"}</h1>
@@ -115,7 +176,7 @@ export default function ClientDashboard() {
         <input type="checkbox" checked={showPassword} onChange={event => setShowPassword(event.target.checked)}
           style={{width:16,height:16}}/> Tampilkan password
       </label>
-      <button type="submit">{register ? "Daftar & Verifikasi Email" : "Masuk ke Dashboard Client"}</button>
+      <button type="submit" disabled={submittingAuth}>{submittingAuth ? "Memproses…" : (register ? "Daftar & Verifikasi Email" : "Masuk ke Dashboard Client")}</button>
     </form>
     <button className="secondary" style={{ marginTop: 12, width: "100%" }} onClick={() => { setRegister(!register); setMessage(""); }}>
       {register ? "Sudah punya akun? Masuk" : "Belum punya akun? Daftar"}
