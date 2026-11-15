@@ -69,6 +69,17 @@ export default function ClientDashboard() {
       securityType: (card.wifi_networks?.security_type || "WPA2") as EditForm["securityType"],
       instructions: card.wifi_networks?.instructions || "" });
   }
+  async function copyNfcUrl(slug: string) {
+    const url = new URL("/wifi/" + encodeURIComponent(slug), window.location.origin);
+    url.searchParams.set("src", "nfc");
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setMessage("URL NFC disalin. URL Preview hanya untuk pengujian, belum untuk kartu permanen.");
+    } catch {
+      setMessage("Clipboard tidak tersedia. Salin alamat dari browser secara manual.");
+    }
+  }
+
   async function saveSettings(event: FormEvent) {
     event.preventDefault();
     if (!selected) return;
@@ -79,7 +90,7 @@ export default function ClientDashboard() {
       });
       const json = await response.json();
       if (!response.ok || !json.success) setMessage(json.error || "Gagal menyimpan");
-      else { setMessage("Pengaturan WiFi berhasil disimpan."); await load(); }
+      else { await load(); setMessage("Pengaturan WiFi berhasil disimpan."); }
     } catch { setMessage("Koneksi bermasalah. Silakan coba lagi."); }
     finally { setSaving(false); }
   }
@@ -142,7 +153,9 @@ export default function ClientDashboard() {
         <td><span className={"badge " + card.status}>{card.status}</span></td>
         <td>{stats[card.id]?.qr ?? 0} QR · {stats[card.id]?.nfc ?? 0} NFC</td>
         <td><button className="secondary small" onClick={() => selectCard(card)}>Kelola WiFi</button>
-          <a style={{ marginLeft: 8 }} target="_blank" rel="noreferrer" href={"/wifi/" + encodeURIComponent(card.slug)}>Lihat Publik</a></td>
+          <a className="button small secondary" style={{ marginLeft: 8 }} target="_blank" rel="noreferrer" href={"/wifi/" + encodeURIComponent(card.slug)}>Lihat Publik</a>
+          <a className="button small secondary" style={{ marginLeft: 8 }} href={"/api/qr/" + encodeURIComponent(card.slug)} download={card.card_code + "-QR.png"}>Download QR</a>
+          <button className="small secondary" style={{ marginLeft: 8, marginTop: 6 }} onClick={() => void copyNfcUrl(card.slug)}>Copy NFC URL</button></td>
       </tr>)}</tbody></table></div>
     </section>)}
     {selected && <section className="panel" style={{ maxWidth: 650 }}>
