@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { requireWiV1Provider, isWiV1BusinessOwned } from "@/lib/wiv1-access";
+import { requireWiV1Provider } from "@/lib/wiv1-access";
 import { encryptSecret } from "@/lib/crypto";
 import { isValidProtectedWifiPassword } from "@/lib/wifi-validation";
 
@@ -71,7 +71,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const admin = await requireAdmin();
+    const admin = await requireWiV1Provider();
     if (!admin) return NextResponse.json({ success: false, data: null, error: "Unauthorized" }, { status: 401 });
     const body = schema.parse(await request.json());
 
