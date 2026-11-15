@@ -28,7 +28,8 @@ export default function PrintCardPage() {
 
   useEffect(() => {
     let active = true;
-    fetch("/api/admin/cards", { cache: "no-store" })
+    const listEndpoint = window.location.pathname.startsWith("/client/") ? "/api/client/cards" : "/api/admin/cards";
+    fetch(listEndpoint, { cache: "no-store" })
       .then(async response => {
         if (!response.ok) throw new Error("Gagal memuat daftar kartu");
         return response.json();
