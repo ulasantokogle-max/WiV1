@@ -29,6 +29,13 @@ begin
  if v_result->>'reason' <> 'already_owned' then raise exception 'Provider silently added another owner'; end if;
  if (select count(*) from public.wiv1_business_owners where business_id=v_business) <> 1 then
    raise exception 'Second owner mapping was created'; end if;
+ -- Direct service-role writes cannot bypass the single-owner invariant.
+ begin
+   insert into public.wiv1_business_owners(business_id,user_id) values (v_business,v_second_client);
+   raise exception 'Direct second-owner insert unexpectedly succeeded';
+ exception when unique_violation then
+   null;
+ end;
  v_result := public.wiv1_assign_business_owner(v_business,'not-registered@example.test');
  if v_result->>'reason' <> 'user_not_found' then raise exception 'Unregistered user assigned'; end if;
  v_result := public.wiv1_assign_business_owner(v_business,'provider-qa@example.test');
