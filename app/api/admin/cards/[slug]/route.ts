@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { createSupabaseServer } from "@/lib/supabase-server";
+import { requireWiV1Provider, isWiV1BusinessOwned } from "@/lib/wiv1-access";
 import { encryptSecret } from "@/lib/crypto";
 import { isValidProtectedWifiPassword } from "@/lib/wifi-validation";
 
@@ -16,17 +16,9 @@ const schema = z.object({
   instructions: z.string().max(2000).optional().or(z.literal("")),
 });
 
-async function requireAdmin() {
-  const supabase = await createSupabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data: admin } = await supabaseAdmin.from("admin_users").select("user_id").eq("user_id", user.id).maybeSingle();
-  return admin ? user : null;
-}
-
 export async function PATCH(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
-    if (!(await requireAdmin())) return NextResponse.json({ success: false, data: null, error: "Unauthorized" }, { status: 401 });
+    if (!(await requireWiV1Provider())) return NextResponse.json({ success: false, data: null, error: "Unauthorized" }, { status: 401 });
     const { slug } = await params;
     const body = schema.parse(await request.json());
     if (body.securityType !== "Open" && body.password && !isValidProtectedWifiPassword(body.password)) {
@@ -36,6 +28,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
     const { data: card, error: cardError } = await supabaseAdmin.from("wifi_cards").select("id,business_id,location_id,slug").eq("slug", slug).maybeSingle();
     if (cardError) throw cardError;
     if (!card) return NextResponse.json({ success: false, data: null, error: "Kartu tidak ditemukan" }, { status: 404 });
+    // Once an owner accepts a business, Provider is monitoring-only (V3-style).
+    if (await isWiV1BusinessOwned(card.business_id)) {
+      return NextResponse.json({ success: false, data: null, error: "Bisnis sudah memiliki owner. Perubahan WiFi hanya melalui Dashboard Client." }, { status: 403 });
+    }
 
     // Open networks must not retain the previous encrypted WPA password.
     // Switching from Open to WPA requires an explicit new password.
