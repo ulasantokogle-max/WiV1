@@ -11,7 +11,7 @@ export default function AdminPage() {
   const supabase = useMemo(() => createSupabaseBrowser(), []);
   const router = useRouter();
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
-  const [loggedIn, setLoggedIn] = useState(false); const [loading, setLoading] = useState(true); const [message, setMessage] = useState("");
+  const [loggedIn, setLoggedIn] = useState(false); const [loading, setLoading] = useState(true); const [loggingIn, setLoggingIn] = useState(false); const [message, setMessage] = useState("");
   const [ownerEmails, setOwnerEmails] = useState<Record<string,string>>({});
   const [assigning, setAssigning] = useState<string | null>(null);
   const [cards, setCards] = useState<Card[]>([]); const [analytics, setAnalytics] = useState<Analytics>({}); const [search, setSearch] = useState("");
@@ -25,7 +25,28 @@ export default function AdminPage() {
   useEffect(() => { supabase.auth.getUser().then(async ({ data }) => { if (data.user && await loadCards()) setLoggedIn(true); setLoading(false); }).catch(() => setLoading(false)); }, [supabase]);
   useEffect(() => { if (loggedIn) loadCards(); }, [loggedIn]);
 
-  async function login(e: FormEvent) { e.preventDefault(); setMessage(""); const { error } = await supabase.auth.signInWithPassword({ email, password }); if (error) return setMessage(error.message); if (await loadCards()) setLoggedIn(true); }
+  async function login(e: FormEvent) {
+    e.preventDefault();
+    if (loggingIn) return;
+    setLoggingIn(true);
+    setMessage("");
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) {
+        if (/failed to fetch|network|fetch failed/i.test(error.message)) {
+          setMessage("Tidak bisa menghubungi server login WiV1. Periksa koneksi internet, coba nonaktifkan VPN/adblock sementara, lalu coba ulang. Jika masih gagal, cek konfigurasi Supabase di deployment ini.");
+        } else {
+          setMessage(error.message);
+        }
+        return;
+      }
+      if (await loadCards()) { setLoggedIn(true); setPassword(""); }
+    } catch {
+      setMessage("Server login WiV1 tidak dapat dihubungi. Coba buka ulang halaman, cek jaringan, lalu hubungi Provider bila tetap gagal. Password Anda tidak diubah.");
+    } finally {
+      setLoggingIn(false);
+    }
+  }
   async function createCard(e: FormEvent) { e.preventDefault(); setMessage(""); const res = await fetch("/api/admin/cards", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) }); const json = await res.json(); if (!json.success) return setMessage(json.error || "Gagal membuat kartu"); router.push(`/admin/cards/${json.data.slug}`); }
 
   async function assignOwner(businessId: string) {
@@ -47,7 +68,7 @@ export default function AdminPage() {
   const filtered = cards.filter(c => `${c.card_code} ${c.slug} ${c.businesses?.name ?? ""} ${c.locations?.name ?? ""} ${c.wifi_networks?.ssid ?? ""}`.toLowerCase().includes(search.toLowerCase()));
 
   if (loading) return <main className="container page"><div className="skeleton">Loading WiV1…</div></main>;
-  if (!loggedIn) return <main className="auth-page"><div className="auth-card"><div className="brand-mark">Wi</div><p className="eyebrow">WIV1 / PROVIDER</p><h1>Provider Dashboard</h1><p className="muted">Login khusus Provider untuk membuat kartu, menghubungkan owner, dan memantau statistik bisnis.</p><form onSubmit={login} className="form"><input required type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} /><input required type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} /><button type="submit">Masuk ke Dashboard</button></form>{message && <p className="error">{message}</p>}<p className="muted" style={{marginTop:14,fontSize:13}}>Pemilik bisnis? <a href="/client" style={{textDecoration:"underline"}}>Masuk Dashboard Client</a></p></div></main>;
+  if (!loggedIn) return <main className="auth-page"><div className="auth-card"><div className="brand-mark">Wi</div><p className="eyebrow">WIV1 / PROVIDER</p><h1>Provider Dashboard</h1><p className="muted">Login khusus Provider untuk membuat kartu, menghubungkan owner, dan memantau statistik bisnis.</p><form onSubmit={login} className="form"><input required type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} /><input required type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} /><button type="submit" disabled={loggingIn}>{loggingIn ? "Menghubungkan…" : "Masuk ke Dashboard"}</button></form>{message && <p className="error">{message}</p>}<p className="muted" style={{marginTop:14,fontSize:13}}>Pemilik bisnis? <a href="/client" style={{textDecoration:"underline"}}>Masuk Dashboard Client</a></p></div></main>;
 
   return <main className="container page">
     <header className="dashboard-head"><div><p className="eyebrow">WIV1 / PROVIDER DASHBOARD</p><h1>Provider WiFi Cards</h1><p className="muted">Provisioning kartu, hubungkan akun client, dan monitoring aktivitas.</p></div><div className="head-actions"><button onClick={() => router.push("/provider/cards/new")}>+ Buat Card</button><button className="secondary" onClick={() => router.push("/provider/analytics")}>Analytics</button><button className="secondary" onClick={() => supabase.auth.signOut().then(() => setLoggedIn(false))}>Logout</button></div></header>
