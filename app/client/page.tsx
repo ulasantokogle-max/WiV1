@@ -23,6 +23,7 @@ export default function ClientDashboard() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showWifiPassword, setShowWifiPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [cards, setCards] = useState<Card[]>([]);
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -99,7 +100,7 @@ export default function ClientDashboard() {
   }
 
   function selectCard(card: Card) {
-    setSelected(card.slug); setMessage("");
+    setSelected(card.slug); setMessage(""); setShowWifiPassword(false);
     setEdit({ ssid: card.wifi_networks?.ssid || "", password: "",
       securityType: (card.wifi_networks?.security_type || "WPA2") as EditForm["securityType"],
       instructions: card.wifi_networks?.instructions || "" });
@@ -234,9 +235,35 @@ export default function ClientDashboard() {
           <option>WPA2</option><option>WPA3</option><option>Open</option>
         </select>
         {edit.securityType !== "Open" && <>
-          <label>Password WiFi baru</label><input type="password" autoComplete="new-password"
-            placeholder="Kosongkan jika password tidak berubah" value={edit.password}
-            onChange={event => setEdit(prev => ({ ...prev, password: event.target.value }))}/>
+          <label>Password WiFi baru</label>
+          <div style={{ position: "relative" }}>
+            <input type={showWifiPassword ? "text" : "password"} autoComplete="new-password"
+              placeholder="Kosongkan jika password tidak berubah" value={edit.password}
+              onChange={event => setEdit(prev => ({ ...prev, password: event.target.value }))}
+              style={{ width: "100%", paddingRight: 48 }}/>
+            <button type="button"
+              aria-label={showWifiPassword ? "Sembunyikan password WiFi" : "Tampilkan password WiFi"}
+              aria-pressed={showWifiPassword}
+              title={showWifiPassword ? "Sembunyikan password" : "Intip password"}
+              onClick={() => setShowWifiPassword(value => !value)}
+              style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                width: 32, height: 32, padding: 4, background: "transparent",
+                border: "none", boxShadow: "none", color: "#475467", cursor: "pointer" }}>
+              {showWifiPassword ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 5.1A11 11 0 0112 4c5 0 9.3 3.1 11 8a11.7 11.7 0 01-2.3 3.9M6.6 6.6A12.2 12.2 0 002 12c1.7 4.9 6 8 10 8 1.6 0 3.2-.4 4.6-1.1"
+                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M2 12c1.7-4.9 6-8 10-8s8.3 3.1 10 8c-1.7 4.9-6 8-10 8S3.7 16.9 2 12z"
+                    stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+                  <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
+                </svg>
+              )}
+            </button>
+          </div>
           <p className="muted" style={{ fontSize: 12 }}>Wajib diisi ketika mengubah jaringan Open menjadi WPA.</p>
         </>}
         <label>Instruksi untuk pelanggan</label><textarea rows={4} maxLength={2000} value={edit.instructions}
