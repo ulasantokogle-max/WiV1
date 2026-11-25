@@ -10,7 +10,7 @@ type Analytics = Record<string, { pageViews: number; qrScans: number; nfcScans: 
 export default function AdminPage() {
   const supabase = useMemo(() => createSupabaseBrowser(), []);
   const router = useRouter();
-  const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [showPassword, setShowPassword] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false); const [loading, setLoading] = useState(true); const [loggingIn, setLoggingIn] = useState(false); const [message, setMessage] = useState("");
   const [ownerEmails, setOwnerEmails] = useState<Record<string,string>>({});
   const [assigning, setAssigning] = useState<string | null>(null);
@@ -68,7 +68,30 @@ export default function AdminPage() {
   const filtered = cards.filter(c => `${c.card_code} ${c.slug} ${c.businesses?.name ?? ""} ${c.locations?.name ?? ""} ${c.wifi_networks?.ssid ?? ""}`.toLowerCase().includes(search.toLowerCase()));
 
   if (loading) return <main className="container page"><div className="skeleton">Loading WiV1…</div></main>;
-  if (!loggedIn) return <main className="auth-page"><div className="auth-card"><div className="brand-mark">Wi</div><p className="eyebrow">WIV1 / PROVIDER</p><h1>Provider Dashboard</h1><p className="muted">Login khusus Provider untuk membuat kartu, menghubungkan owner, dan memantau statistik bisnis.</p><form onSubmit={login} className="form"><input required type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} /><input required type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} /><button type="submit" disabled={loggingIn}>{loggingIn ? "Menghubungkan…" : "Masuk ke Dashboard"}</button></form>{message && <p className="error">{message}</p>}<p className="muted" style={{marginTop:14,fontSize:13}}>Pemilik bisnis? <a href="/client" style={{textDecoration:"underline"}}>Masuk Dashboard Client</a></p></div></main>;
+  if (!loggedIn) return <main className="auth-page"><div className="auth-card"><div className="brand-mark">Wi</div><p className="eyebrow">WIV1 / PROVIDER</p><h1>Provider Dashboard</h1><p className="muted">Login khusus Provider untuk membuat kartu, menghubungkan owner, dan memantau statistik bisnis.</p><form onSubmit={login} className="form"><input required type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} /><div style={{ position: "relative" }}>
+    <input required type={showPassword ? "text" : "password"} placeholder="Password" autoComplete="current-password"
+      value={password} onChange={e => setPassword(e.target.value)} style={{ width: "100%", paddingRight: 48 }} />
+    <button type="button" aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+      aria-pressed={showPassword} title={showPassword ? "Sembunyikan password" : "Intip password"}
+      onClick={() => setShowPassword(prev => !prev)}
+      style={{ position: "absolute", top: "50%", right: 10, transform: "translateY(-50%)",
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: 32, height: 32, padding: 4, background: "transparent", border: "none",
+        boxShadow: "none", color: "#475467", cursor: "pointer" }}>
+      {showPassword ? (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 5.1A11 11 0 0112 4c5 0 9.3 3.1 11 8a11.7 11.7 0 01-2.3 3.9M6.6 6.6A12.2 12.2 0 002 12c1.7 4.9 6 8 10 8 1.6 0 3.2-.4 4.6-1.1"
+            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      ) : (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M2 12c1.7-4.9 6-8 10-8s8.3 3.1 10 8c-1.7 4.9-6 8-10 8S3.7 16.9 2 12z"
+            stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+          <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
+        </svg>
+      )}
+    </button>
+  </div><button type="submit" disabled={loggingIn}>{loggingIn ? "Menghubungkan…" : "Masuk ke Dashboard"}</button></form>{message && <p className="error">{message}</p>}<p className="muted" style={{marginTop:14,fontSize:13}}>Pemilik bisnis? <a href="/client" style={{textDecoration:"underline"}}>Masuk Dashboard Client</a></p></div></main>;
 
   return <main className="container page">
     <header className="dashboard-head"><div><p className="eyebrow">WIV1 / PROVIDER DASHBOARD</p><h1>Provider WiFi Cards</h1><p className="muted">Provisioning kartu, hubungkan akun client, dan monitoring aktivitas.</p></div><div className="head-actions"><button onClick={() => router.push("/provider/cards/new")}>+ Buat Card</button><button className="secondary" onClick={() => router.push("/provider/analytics")}>Analytics</button><button className="secondary" onClick={() => supabase.auth.signOut().then(() => setLoggedIn(false))}>Logout</button></div></header>
