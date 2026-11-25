@@ -170,16 +170,58 @@ export default function ClientDashboard() {
     <p className="muted">Dashboard pribadi untuk melihat kartu, statistik, dan mengatur WiFi bisnis Anda.</p>
     <form className="form" onSubmit={authenticate}>
       <input required type="email" placeholder="Email owner" value={email} onChange={event => setEmail(event.target.value)}/>
-      <input required type={showPassword ? "text" : "password"} minLength={register ? 8 : undefined}
-        autoComplete={register ? "new-password" : "current-password"} placeholder="Password"
-        value={password} onChange={event => setPassword(event.target.value)}/>
-      {register && <input required type={showPassword ? "text" : "password"} minLength={8}
-        autoComplete="new-password" placeholder="Ulangi password" value={confirmPassword}
-        onChange={event => setConfirmPassword(event.target.value)}/>}
-      <label style={{display:"flex",alignItems:"center",gap:8,fontSize:13,color:"#475467"}}>
-        <input type="checkbox" checked={showPassword} onChange={event => setShowPassword(event.target.checked)}
-          style={{width:16,height:16}}/> Tampilkan password
-      </label>
+      <div style={{ position: "relative" }}>
+        <input required type={showPassword ? "text" : "password"} minLength={register ? 8 : undefined}
+          autoComplete={register ? "new-password" : "current-password"} placeholder="Password"
+          value={password} onChange={event => setPassword(event.target.value)}
+          style={{ width: "100%", paddingRight: 48 }}/>
+        <button type="button" aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+          aria-pressed={showPassword} title={showPassword ? "Sembunyikan password" : "Intip password"}
+          onClick={() => setShowPassword(prev => !prev)}
+          style={{ position: "absolute", top: "50%", right: 10, transform: "translateY(-50%)",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: 32, height: 32, padding: 4, background: "transparent", border: "none",
+            boxShadow: "none", color: "#475467", cursor: "pointer" }}>
+          {showPassword ? (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 5.1A11 11 0 0112 4c5 0 9.3 3.1 11 8a11.7 11.7 0 01-2.3 3.9M6.6 6.6A12.2 12.2 0 002 12c1.7 4.9 6 8 10 8 1.6 0 3.2-.4 4.6-1.1"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          ) : (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M2 12c1.7-4.9 6-8 10-8s8.3 3.1 10 8c-1.7 4.9-6 8-10 8S3.7 16.9 2 12z"
+                stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+              <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
+            </svg>
+          )}
+        </button>
+      </div>
+      {register && <div style={{ position: "relative" }}>
+        <input required type={showPassword ? "text" : "password"} minLength={8}
+          autoComplete="new-password" placeholder="Ulangi password" value={confirmPassword}
+          onChange={event => setConfirmPassword(event.target.value)}
+          style={{ width: "100%", paddingRight: 48 }}/>
+        <button type="button" aria-label={showPassword ? "Sembunyikan konfirmasi password" : "Tampilkan konfirmasi password"}
+          aria-pressed={showPassword} title={showPassword ? "Sembunyikan password" : "Intip password"}
+          onClick={() => setShowPassword(prev => !prev)}
+          style={{ position: "absolute", top: "50%", right: 10, transform: "translateY(-50%)",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: 32, height: 32, padding: 4, background: "transparent", border: "none",
+            boxShadow: "none", color: "#475467", cursor: "pointer" }}>
+          {showPassword ? (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 5.1A11 11 0 0112 4c5 0 9.3 3.1 11 8a11.7 11.7 0 01-2.3 3.9M6.6 6.6A12.2 12.2 0 002 12c1.7 4.9 6 8 10 8 1.6 0 3.2-.4 4.6-1.1"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          ) : (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M2 12c1.7-4.9 6-8 10-8s8.3 3.1 10 8c-1.7 4.9-6 8-10 8S3.7 16.9 2 12z"
+                stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+              <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
+            </svg>
+          )}
+        </button>
+      </div>}
       <button type="submit" disabled={submittingAuth}>{submittingAuth ? "Memproses…" : (register ? "Daftar & Verifikasi Email" : "Masuk ke Dashboard Client")}</button>
     </form>
     <button className="secondary" style={{ marginTop: 12, width: "100%" }} onClick={() => { setRegister(!register); setMessage(""); }}>
