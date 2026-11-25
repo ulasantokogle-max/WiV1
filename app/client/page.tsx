@@ -31,22 +31,23 @@ export default function ClientDashboard() {
   const [edit, setEdit] = useState<EditForm>({ ssid: "", password: "", securityType: "WPA2", instructions: "" });
   const [saving, setSaving] = useState(false);
 
-  async function load() {
+  async function load(): Promise<boolean> {
     const response = await fetch("/api/client/cards", { cache: "no-store" });
     const json = await response.json();
     if (!response.ok || !json.success) {
       setMessage(json.error || "Akses client tidak tersedia");
-      setCards([]); setBusinesses([]); return;
+      setCards([]); setBusinesses([]); return false;
     }
     setCards(json.data.cards); setBusinesses(json.data.businesses); setStats(json.data.analytics);
     setMessage("");
+    return true;
   }
   useEffect(() => {
     let active = true;
     supabase.auth.getUser().then(async ({ data }) => {
       if (!active) return;
-      setLoggedIn(!!data.user);
-      if (data.user) await load();
+      if (data.user) setLoggedIn(await load());
+      else setLoggedIn(false);
       if (active) setLoading(false);
     }).catch(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -71,7 +72,9 @@ export default function ClientDashboard() {
       }
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) { setMessage(error.message); return; }
-      setPassword(""); setLoggedIn(true); await load();
+      setPassword("");
+      if (await load()) setLoggedIn(true);
+      else setLoggedIn(false);
     } catch {
       setMessage("Tidak dapat menghubungi layanan login WiV1. Periksa koneksi internet dan coba lagi.");
     } finally {
